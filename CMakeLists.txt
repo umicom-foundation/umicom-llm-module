@@ -72,6 +72,12 @@ target_link_libraries(umicom_llm_module PUBLIC
 umicom_apply_warnings(umicom_llm_module)
 umicom_apply_sanitizers(umicom_llm_module)
 
+include(
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../framework/cmake/UmicomThinApplicationRuntime.cmake")
+umicom_extend_thin_application_runtime(
+    NAME "llm"
+    TARGET "umicom_llm_module")
+
 if(UMICOM_LLM_BUILD_CONSOLE)
     add_executable(umicom-llm-console
         src/console/main.c)
