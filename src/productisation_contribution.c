@@ -28,12 +28,20 @@ static const UmiProductApplicationAdoption ADOPTION = {
     1
 };
 
+/*
+ * Provide the llm productisation contribution operation used by this module and its client
+ * applications.
+ */
 const UmiProductApplicationAdoption *
 umi_llm_productisation_contribution(void)
 {
     return &ADOPTION;
 }
 
+/*
+ * Provide the llm productisation snapshot operation used by this module and its client
+ * applications.
+ */
 UmiStatus umi_llm_productisation_snapshot(
     UmiProductApplicationAdoptionSnapshot *out_snapshot)
 {
