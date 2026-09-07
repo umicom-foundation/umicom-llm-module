@@ -6,6 +6,8 @@ application:
   short_name: LLM
   version: 0.1.0
   executable: umicom-llm-console
+  native_executable: umicom-llm
+  console_executable: umicom-llm-console
   aliases: [llm]
 
 framework:
@@ -14,6 +16,8 @@ framework:
 
 frontends:
   - console
+  # Shared Framework GTK layout preview; domain services require controllers.
+  - gtk
 
 entry:
   kind: workbench
