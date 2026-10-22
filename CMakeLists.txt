@@ -153,3 +153,21 @@ umicom_add_application_productisation_contribution(
 # surface and example without removing the module's existing tests or layouts.
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../framework/cmake/UmicomAiWorkspace.cmake")
 umicom_attach_ai_workspace(NAME llm TARGET umicom_llm_module)
+
+# Optional native byte-completion evidence for reviewed decoder checkpoints.
+# Keep the existing LLM product and console unchanged unless explicitly enabled.
+# The shared maths, sampling and benchmark APIs come from Framework only.
+option(UMICOM_LLM_BUILD_NATIVE_BENCHMARK
+       "Build read-only native Umicom LLM completion benchmark" OFF)
+if(UMICOM_LLM_BUILD_NATIVE_BENCHMARK)
+    if(NOT TARGET Umicom::AiTraining)
+        include("${CMAKE_CURRENT_SOURCE_DIR}/../../framework/cmake/UmicomNativeLlmTraining.cmake")
+    endif()
+    add_executable(umicom-llm-benchmark src/console/benchmark_main.c)
+    target_link_libraries(umicom-llm-benchmark PRIVATE Umicom::AiTraining)
+    target_compile_features(umicom-llm-benchmark PRIVATE c_std_23)
+    umicom_apply_warnings(umicom-llm-benchmark)
+    umicom_apply_sanitizers(umicom-llm-benchmark)
+    install(TARGETS umicom-llm-benchmark
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
