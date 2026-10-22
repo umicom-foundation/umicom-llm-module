@@ -12,6 +12,7 @@
  *---------------------------------------------------------------------------*/
 #include "umicom/ai/training/benchmark.h"
 #include "umicom/ai/training/benchmark_suite.h"
+#include "umicom/ai/training/benchmark_evidence.h"
 #include "umicom/ai/training/checkpoint.h"
 #include <inttypes.h>
 #include <stdio.h>
@@ -50,13 +51,29 @@ int main(int argc, char **argv)
     UmiAiTrainingBenchmarkReport report;
     UmiAiTrainingDecoder *decoder = NULL;
     UmiStatus status;
+    int jsonEvidenceRequested = 0;
+    const char *reviewedSuitePath = NULL;
 
-    if ((argc != 2 && argc != 3) || argv[1] == NULL || argv[1][0] == '\0') {
-        fprintf(stderr, "usage: umicom-llm-benchmark <approved-decoder-checkpoint> [reviewed-suite-file]\n");
+    if ((argc != 2 && argc != 3 && argc != 4) ||
+        argv[1] == NULL || argv[1][0] == '\0' ||
+        (argc == 4 && strcmp(argv[3], "--evidence-json") != 0)) {
+        fprintf(stderr, "usage: umicom-llm-benchmark <approved-decoder-checkpoint> [reviewed-suite-file] [--evidence-json]\n");
         return 2;
     }
+    /* Existing console invocation is unchanged. The optional JSON path
+     * prints only machine-readable evidence on stdout and does not write a
+     * checkpoint, model output or any other file. */
     if (argc == 3) {
-        status = UmiAiTrainingBenchmarkSuiteLoadFile(argv[2], &suite);
+        if (strcmp(argv[2], "--evidence-json") == 0)
+            jsonEvidenceRequested = 1;
+        else
+            reviewedSuitePath = argv[2];
+    } else if (argc == 4) {
+        reviewedSuitePath = argv[2];
+        jsonEvidenceRequested = 1;
+    }
+    if (reviewedSuitePath != NULL) {
+        status = UmiAiTrainingBenchmarkSuiteLoadFile(reviewedSuitePath, &suite);
         if (status != UMI_STATUS_OK) {
             fprintf(stderr, "Reviewed benchmark suite rejected (status=%d)\n",
                     (int)status);
@@ -84,6 +101,24 @@ int main(int argc, char **argv)
         fprintf(stderr, "Completion benchmark rejected (status=%d)\n",
                 (int)status);
         goto failed;
+    }
+    if (jsonEvidenceRequested) {
+        UmiAiTrainingBenchmarkEvidence evidence;
+        char json[UMI_AI_BENCHMARK_EVIDENCE_MAX_JSON_BYTES];
+        size_t bytesWritten = 0U;
+        status = UmiAiTrainingBenchmarkEvidenceInspect(
+            decoder, activeCases, results, caseCount, &report,
+            &sampling, UINT64_C(20261022), &evidence);
+        if (status != UMI_STATUS_OK) goto failed;
+        status = UmiAiTrainingBenchmarkEvidenceJson(
+            activeCases, results, caseCount, &report, &evidence,
+            json, sizeof(json), &bytesWritten);
+        if (status != UMI_STATUS_OK) goto failed;
+        if (fwrite(json, 1U, bytesWritten, stdout) != bytesWritten ||
+            fflush(stdout) != 0) goto failed;
+        UmiAiTrainingDecoderDestroy(decoder);
+        UmiAiTrainingBenchmarkSuiteDestroy(suite);
+        return 0;
     }
     puts("Umicom LLM — Reviewed Teaching Completion Benchmark");
     printf("Checkpoint steps: %" PRIu64 "; cases: %zu\n",
