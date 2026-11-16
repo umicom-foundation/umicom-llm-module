@@ -7,8 +7,12 @@
  *   Framework owns checkpoints, sampling, validation and all score metrics.
  *   No generated source is executed, compiled, saved or treated as trusted.
  *
- * AUTHOR AND ORGANISATION: Sammy Hegab / Umicom Foundation
- * LICENCE: MIT
+ * AUTHOR AND ORGANISATION:
+ * Sammy Hegab
+ * Umicom Foundation
+ *
+ * LICENCE:
+ * MIT
  *---------------------------------------------------------------------------*/
 #include "umicom/ai/training/benchmark.h"
 #include "umicom/ai/training/benchmark_suite.h"
@@ -17,6 +21,9 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
+#include "benchmark_options.h"
+#include "umicom/desktop_system/self_memory_report.h"
+#include "umicom/platform/native_arguments.h"
 
 /* Curated teaching fragments, not an independent or hidden skill benchmark.
  * Later training/evaluation suites must be reviewed for leakage and licensed
@@ -28,7 +35,20 @@ static const uint8_t ANSWER_AMOUNT[] = "#include <stdint.h>\n";
 static const uint8_t PROMPT_CHECK[] = "UmiStatus AccountValidate(";
 static const uint8_t ANSWER_CHECK[] = "const Account *account)";
 
+/* Diagnostics remain opt-in and separate from benchmark score JSON. Framework
+ * owns platform sampling and exact serialization; this wrapper supplies stages. */
+static void BenchmarkMemoryObserve(int enabled,const char *stage)
+{
+    if(!enabled) return;
+    UmiStatus status=UmiDesktopSelfMemoryReport(stage,stderr);
+    if(status!=UMI_STATUS_OK) fprintf(stderr,"Memory observation %s unavailable (status=%d)\n",stage,(int)status);
+}
+/* The former process entry is retained; UTF-8 arguments now come from the same
+ * Framework boundary as the other native applications. */
+#if 0
 int main(int argc, char **argv)
+#endif
+static int BenchmarkCommand(int argc, char **argv)
 {
     const UmiAiTrainingSamplingOptions sampling = {1.0F, 1U};
     const UmiAiTrainingBenchmarkCase cases[] = {
@@ -54,6 +74,9 @@ int main(int argc, char **argv)
     int jsonEvidenceRequested = 0;
     const char *reviewedSuitePath = NULL;
 
+    /* The previous argument shape is preserved for review. The bounded parser
+     * retains existing invocations and accepts the optional memory switch. */
+#if 0
     if ((argc != 2 && argc != 3 && argc != 4) ||
         argv[1] == NULL || argv[1][0] == '\0' ||
         (argc == 4 && strcmp(argv[3], "--evidence-json") != 0)) {
@@ -72,11 +95,21 @@ int main(int argc, char **argv)
         reviewedSuitePath = argv[2];
         jsonEvidenceRequested = 1;
     }
+#endif
+    LlmBenchmarkOptions options;
+    if(!LlmBenchmarkOptionsParse(argc,argv,&options)) {
+        fputs("usage: umicom-llm-benchmark <approved-decoder-checkpoint> [reviewed-suite-file] [--evidence-json] [--memory-observations]\n",stderr);
+        return 2;
+    }
+    jsonEvidenceRequested=options.evidence_json;
+    reviewedSuitePath=options.suite;
+    BenchmarkMemoryObserve(options.memory_observations,"before-load");
     if (reviewedSuitePath != NULL) {
         status = UmiAiTrainingBenchmarkSuiteLoadFile(reviewedSuitePath, &suite);
         if (status != UMI_STATUS_OK) {
             fprintf(stderr, "Reviewed benchmark suite rejected (status=%d)\n",
                     (int)status);
+            BenchmarkMemoryObserve(options.memory_observations,"load-failed");
             return 1;
         }
         status = UmiAiTrainingBenchmarkSuiteCount(suite, &caseCount);
@@ -92,8 +125,10 @@ int main(int argc, char **argv)
         fprintf(stderr, "Unable to load reviewed native decoder (status=%d)\n",
                 (int)status);
         UmiAiTrainingBenchmarkSuiteDestroy(suite);
+        BenchmarkMemoryObserve(options.memory_observations,"released-after-failure");
         return 1;
     }
+    BenchmarkMemoryObserve(options.memory_observations,"loaded");
     status = UmiAiTrainingBenchmarkRun(decoder, activeCases, caseCount,
                                      &sampling, UINT64_C(20261022),
                                      results, caseCount, &report);
@@ -102,6 +137,7 @@ int main(int argc, char **argv)
                 (int)status);
         goto failed;
     }
+    BenchmarkMemoryObserve(options.memory_observations,"generated");
     if (jsonEvidenceRequested) {
         UmiAiTrainingBenchmarkEvidence evidence;
         char json[UMI_AI_BENCHMARK_EVIDENCE_MAX_JSON_BYTES];
@@ -118,6 +154,7 @@ int main(int argc, char **argv)
             fflush(stdout) != 0) goto failed;
         UmiAiTrainingDecoderDestroy(decoder);
         UmiAiTrainingBenchmarkSuiteDestroy(suite);
+        BenchmarkMemoryObserve(options.memory_observations,"released");
         return 0;
     }
     puts("Umicom LLM — Reviewed Teaching Completion Benchmark");
@@ -138,9 +175,19 @@ int main(int argc, char **argv)
     puts("No generated code has been executed, saved or deemed trustworthy.");
     UmiAiTrainingDecoderDestroy(decoder);
     UmiAiTrainingBenchmarkSuiteDestroy(suite);
+    BenchmarkMemoryObserve(options.memory_observations,"released");
     return 0;
 failed:
     UmiAiTrainingDecoderDestroy(decoder);
     UmiAiTrainingBenchmarkSuiteDestroy(suite);
+    BenchmarkMemoryObserve(options.memory_observations,"released-after-failure");
     return 1;
+}
+
+int main(int argc,char **argv)
+{
+    int result=1;
+    UmiStatus status=UmiNativeArgumentsDispatch(argc,argv,BenchmarkCommand,&result);
+    if(status!=UMI_STATUS_OK) { fprintf(stderr,"Benchmark argument decoding failed (status=%d)\n",(int)status);return 1; }
+    return result;
 }

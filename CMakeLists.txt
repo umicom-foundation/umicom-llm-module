@@ -164,10 +164,47 @@ if(UMICOM_LLM_BUILD_NATIVE_BENCHMARK)
         include("${CMAKE_CURRENT_SOURCE_DIR}/../../framework/cmake/UmicomNativeLlmTraining.cmake")
     endif()
     add_executable(umicom-llm-benchmark src/console/benchmark_main.c)
+    # The former minimal link is preserved; desktop observations and UTF-8 entry
+    # handling now use their shared Framework components.
+    if(FALSE)
     target_link_libraries(umicom-llm-benchmark PRIVATE Umicom::AiTraining)
+    endif()
+    # Native observations are an explicitly requested diagnostic surface. Reuse
+    # the installed/source desktop and UTF-8 platform services without app copies.
+    if(NOT TARGET Umicom::desktop_system)
+        message(FATAL_ERROR "Native LLM benchmark requires Framework desktop_system")
+    endif()
+    target_link_libraries(umicom-llm-benchmark PRIVATE Umicom::AiTraining Umicom::desktop_system Umicom::platform)
     target_compile_features(umicom-llm-benchmark PRIVATE c_std_23)
     umicom_apply_warnings(umicom-llm-benchmark)
     umicom_apply_sanitizers(umicom-llm-benchmark)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/../../framework/cmake/UmicomApplicationBranding.cmake")
+    umicom_apply_application_branding(TARGET umicom-llm-benchmark
+        PRODUCT_NAME "Umicom LLM Benchmark" INTERNAL_NAME "umicom-llm-benchmark"
+        APPLICATION_ID "org.umicom.llm.benchmark" NO_RUNTIME_DEPLOYMENT)
     install(TARGETS umicom-llm-benchmark
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
+# Product-specific switches have no model or platform side effects.
+if(BUILD_TESTING)
+    add_executable(llm-benchmark-options-test tests/test_benchmark_options.c)
+    umicom_apply_warnings(llm-benchmark-options-test)
+    umicom_apply_sanitizers(llm-benchmark-options-test)
+    foreach(_case IN ITEMS all checkpoint suite json memory suite-json suite-memory both-options reordered dash-suite duplicate-memory duplicate-json two-suites empty-checkpoint empty-suite null-element null-vector null-output too-few too-many negative-count)
+        add_test(NAME "llm.benchmark.options.${_case}" COMMAND llm-benchmark-options-test "${_case}")
+        set_tests_properties("llm.benchmark.options.${_case}" PROPERTIES TIMEOUT 20 LABELS "llm;memory;regression")
+    endforeach()
+endif()
+
+# Compile the real thin console against inert model services; no weights are loaded.
+if(BUILD_TESTING)
+    add_executable(llm-benchmark-memory-test tests/test_benchmark_memory.c)
+    target_link_libraries(llm-benchmark-memory-test PRIVATE Umicom::platform)
+    umicom_apply_warnings(llm-benchmark-memory-test)
+    umicom_apply_sanitizers(llm-benchmark-memory-test)
+    foreach(_case IN ITEMS default text json memory-unavailable suite-failure count-failure case-failure model-failure run-failure evidence-failure json-failure)
+        add_test(NAME "llm.benchmark.memory.${_case}" COMMAND llm-benchmark-memory-test "${_case}")
+        set_tests_properties("llm.benchmark.memory.${_case}" PROPERTIES TIMEOUT 20 LABELS "llm;memory;regression")
+    endforeach()
 endif()
