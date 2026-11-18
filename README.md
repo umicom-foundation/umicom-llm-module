@@ -27,3 +27,7 @@ explains capacity, ownership, thread coordination and recovery in more detail.
 [Import a document for local source retrieval](../../framework/docs/learning/import-searchable-documents.html) explains the shared UTF-8 file/text import, complete passage preview, atomic save and grounded-question workflow. Imports remain local until you separately approve a model request.
 
 [Review changes to your source library](../../framework/docs/learning/review-source-library-changes.html) explains explicit passage selection, complete replacement/removal previews, atomic application and retained evidence for earlier answers. RAG, LLM and Creator share this native workspace page.
+
+## Native cache-budget planning
+
+The optional [cache planning console](docs/CACHE_PLANNING.md) uses Framework to calculate dense KV token capacity from supplied geometry and a byte budget. Enable `UMICOM_LLM_BUILD_CACHE_PLANNER` to build it. This is an offline arithmetic tool, not inference or a guarantee of model fit.

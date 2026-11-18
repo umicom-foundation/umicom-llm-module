@@ -208,3 +208,28 @@ if(BUILD_TESTING)
         set_tests_properties("llm.benchmark.memory.${_case}" PROPERTIES TIMEOUT 20 LABELS "llm;memory;regression")
     endforeach()
 endif()
+
+
+# Product composition stays thin: Framework owns every geometry and parsing rule.
+option(UMICOM_LLM_BUILD_CACHE_PLANNER "Build the offline dense KV-cache planning console" OFF)
+if(UMICOM_LLM_BUILD_CACHE_PLANNER)
+    if(NOT TARGET Umicom::local_models)
+        message(FATAL_ERROR "Umicom LLM cache planning requires Framework local_models")
+    endif()
+    add_executable(umicom-llm-cache-plan src/console/cache_plan_main.c)
+    target_link_libraries(umicom-llm-cache-plan PRIVATE Umicom::local_models Umicom::platform)
+    target_compile_features(umicom-llm-cache-plan PRIVATE c_std_23)
+    umicom_apply_warnings(umicom-llm-cache-plan)
+    umicom_apply_sanitizers(umicom-llm-cache-plan)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/../../framework/cmake/UmicomApplicationBranding.cmake")
+    umicom_apply_application_branding(TARGET umicom-llm-cache-plan
+        PRODUCT_NAME "Umicom LLM Cache Planner" INTERNAL_NAME "umicom-llm-cache-plan"
+        APPLICATION_ID "org.umicom.llm.cache-plan" NO_RUNTIME_DEPLOYMENT)
+    install(TARGETS umicom-llm-cache-plan RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    if(BUILD_TESTING)
+        add_test(NAME llm.cache_plan.command
+            COMMAND "${CMAKE_COMMAND}" "-DTOOL=$<TARGET_FILE:umicom-llm-cache-plan>"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_cache_plan.cmake")
+        set_tests_properties(llm.cache_plan.command PROPERTIES TIMEOUT 20 LABELS "llm;memory;offline")
+    endif()
+endif()
